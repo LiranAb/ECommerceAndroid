@@ -1,6 +1,7 @@
 package com.example.ecommerceandroid
 
 import android.os.Bundle
+import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -17,12 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -36,12 +32,42 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        val prefs = getSharedPreferences("auth", Context.MODE_PRIVATE)
+        val savedToken = prefs.getString("token", null)
+
         setContent {
             ECommerceAndroidTheme {
+                var token by remember { mutableStateOf(savedToken) }
+                var userName by remember { mutableStateOf("") }
+
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    LoginScreen(
-                        modifier = Modifier.padding(innerPadding)
-                    )
+                    if (token == null) {
+                        LoginScreen(
+                            modifier = Modifier.padding(innerPadding),
+                            onLoginSuccess = { newToken, name ->
+                                prefs.edit()
+                                    .putString("token", newToken)
+                                    .putString("userName", name)
+                                    .apply()
+
+                                token = newToken
+                                userName = name
+                            }
+                        )
+                    } else {
+                        HomeScreen(
+                            modifier = Modifier.padding(innerPadding),
+                            userName = userName.ifBlank {
+                                prefs.getString("userName", "User") ?: "User"
+                            },
+                            onLogout = {
+                                prefs.edit().clear().apply()
+                                token = null
+                                userName = ""
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -49,7 +75,10 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun LoginScreen(modifier: Modifier = Modifier) {
+fun LoginScreen(
+    modifier: Modifier = Modifier,
+    onLoginSuccess: (String, String) -> Unit
+) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("") }
@@ -64,10 +93,7 @@ fun LoginScreen(modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = "Login",
-            style = MaterialTheme.typography.headlineMedium
-        )
+        Text("Login", style = MaterialTheme.typography.headlineMedium)
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -100,13 +126,10 @@ fun LoginScreen(modifier: Modifier = Modifier) {
 
                     try {
                         val response = RetrofitClient.authApi.login(
-                            LoginRequest(
-                                email = email,
-                                password = password
-                            )
+                            LoginRequest(email, password)
                         )
 
-                        message = "Welcome ${response.user.name}"
+                        onLoginSuccess(response.token, response.user.name)
                     } catch (e: Exception) {
                         message = "Login failed: ${e.message}"
                     } finally {
@@ -129,6 +152,32 @@ fun LoginScreen(modifier: Modifier = Modifier) {
         if (message.isNotBlank()) {
             Spacer(modifier = Modifier.height(16.dp))
             Text(message)
+        }
+    }
+}
+
+@Composable
+fun HomeScreen(
+    modifier: Modifier = Modifier,
+    userName: String,
+    onLogout: () -> Unit
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "Welcome $userName",
+            style = MaterialTheme.typography.headlineMedium
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Button(onClick = onLogout) {
+            Text("Logout")
         }
     }
 }
