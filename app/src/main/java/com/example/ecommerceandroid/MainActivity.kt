@@ -1,7 +1,6 @@
 package com.example.ecommerceandroid
 
 import android.os.Bundle
-import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -18,11 +17,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.example.ecommerceandroid.network.CartItem
 import com.example.ecommerceandroid.network.LoginRequest
 import com.example.ecommerceandroid.network.RetrofitClient
 import com.example.ecommerceandroid.ui.theme.ECommerceAndroidTheme
@@ -33,38 +39,31 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        val prefs = getSharedPreferences("auth", Context.MODE_PRIVATE)
-        val savedToken = prefs.getString("token", null)
-
         setContent {
             ECommerceAndroidTheme {
-                var token by remember { mutableStateOf(savedToken) }
+                var isLoggedIn by remember { mutableStateOf(false) }
                 var userName by remember { mutableStateOf("") }
+                var token by remember { mutableStateOf("") }
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    if (token == null) {
-                        LoginScreen(
+                    if (isLoggedIn) {
+                        HomeScreen(
                             modifier = Modifier.padding(innerPadding),
-                            onLoginSuccess = { newToken, name ->
-                                prefs.edit()
-                                    .putString("token", newToken)
-                                    .putString("userName", name)
-                                    .apply()
-
-                                token = newToken
-                                userName = name
+                            userName = userName,
+                            token = token,
+                            onLogout = {
+                                userName = ""
+                                token = ""
+                                isLoggedIn = false
                             }
                         )
                     } else {
-                        HomeScreen(
+                        LoginScreen(
                             modifier = Modifier.padding(innerPadding),
-                            userName = userName.ifBlank {
-                                prefs.getString("userName", "User") ?: "User"
-                            },
-                            onLogout = {
-                                prefs.edit().clear().apply()
-                                token = null
-                                userName = ""
+                            onLoginSuccess = { name, userToken ->
+                                userName = name
+                                token = userToken
+                                isLoggedIn = true
                             }
                         )
                     }
@@ -93,7 +92,10 @@ fun LoginScreen(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Login", style = MaterialTheme.typography.headlineMedium)
+        Text(
+            text = "Login",
+            style = MaterialTheme.typography.headlineMedium
+        )
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -126,10 +128,14 @@ fun LoginScreen(
 
                     try {
                         val response = RetrofitClient.authApi.login(
-                            LoginRequest(email, password)
+                            LoginRequest(
+                                email = email,
+                                password = password
+                            )
                         )
 
-                        onLoginSuccess(response.token, response.user.name)
+                        message = "Welcome ${response.user.name}"
+                        onLoginSuccess(response.user.name, response.token)
                     } catch (e: Exception) {
                         message = "Login failed: ${e.message}"
                     } finally {
@@ -160,8 +166,79 @@ fun LoginScreen(
 fun HomeScreen(
     modifier: Modifier = Modifier,
     userName: String,
+    token: String,
     onLogout: () -> Unit
 ) {
+    var showCart by remember { mutableStateOf(false) }
+
+    if (showCart) {
+        CartScreen(
+            modifier = modifier,
+            token = token,
+            onBack = {
+                showCart = false
+            }
+        )
+    } else {
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "Welcome $userName",
+                style = MaterialTheme.typography.headlineMedium
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Button(
+                onClick = {
+                    showCart = true
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("View Cart")
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Button(
+                onClick = onLogout,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Logout")
+            }
+        }
+    }
+}
+
+@Composable
+fun CartScreen(
+    modifier: Modifier = Modifier,
+    token: String,
+    onBack: () -> Unit
+) {
+    var items by remember { mutableStateOf<List<CartItem>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf("") }
+
+    LaunchedEffect(token) {
+        isLoading = true
+        message = ""
+
+        try {
+            val cart = RetrofitClient.authApi.getCart("Bearer $token")
+            items = cart.items
+        } catch (e: Exception) {
+            message = "Failed to load cart: ${e.message}"
+        } finally {
+            isLoading = false
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -170,14 +247,32 @@ fun HomeScreen(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "Welcome $userName",
+            text = "Shopping Cart",
             style = MaterialTheme.typography.headlineMedium
         )
 
+        Spacer(modifier = Modifier.height(16.dp))
+
+        if (isLoading) {
+            CircularProgressIndicator()
+        } else if (message.isNotBlank()) {
+            Text(message)
+        } else if (items.isEmpty()) {
+            Text("Your cart is empty")
+        } else {
+            items.forEach { item ->
+                Text("${item.name} x${item.quantity} -   ${item.price} ₪")
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+
         Spacer(modifier = Modifier.height(24.dp))
 
-        Button(onClick = onLogout) {
-            Text("Logout")
+        Button(
+            onClick = onBack,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Back to Home")
         }
     }
 }

@@ -24,3 +24,23 @@ data class AuthResponse(
     val token: String,
     val user: UserDto
 )
+
+data class CartResponse(
+    val items: List<CartItem>
+)
+
+data class CartItem(
+    val product: ProductInCart?,
+    val name: String,
+    val image: String,
+    val price: Double,
+    val quantity: Int
+)
+
+data class ProductInCart(
+    val _id: String,
+    val name: String,
+    val image: String,
+    val price: Double,
+    val countInStock: Int
+)

@@ -21,4 +21,9 @@ interface AuthApi {
     suspend fun getMe(
         @Header("Authorization") token: String
     ): UserDto
+
+    @GET("cart")
+    suspend fun getCart(
+        @Header("Authorization") token: String
+    ): CartResponse
 }
