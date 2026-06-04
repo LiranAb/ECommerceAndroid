@@ -1,9 +1,12 @@
 package com.example.ecommerceandroid
 
+import android.graphics.BitmapFactory
 import android.os.Bundle
+import android.util.Base64
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,19 +32,17 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.ecommerceandroid.network.CartItem
 import com.example.ecommerceandroid.network.LoginRequest
+import com.example.ecommerceandroid.network.ProductDto
 import com.example.ecommerceandroid.network.RetrofitClient
 import com.example.ecommerceandroid.ui.theme.ECommerceAndroidTheme
 import kotlinx.coroutines.launch
-import android.graphics.BitmapFactory
-import android.util.Base64
-import androidx.compose.foundation.Image
-import androidx.compose.ui.graphics.asImageBitmap
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -177,47 +178,164 @@ fun HomeScreen(
     token: String,
     onLogout: () -> Unit
 ) {
-    var showCart by remember { mutableStateOf(false) }
+    var currentScreen by remember { mutableStateOf("home") }
 
-    if (showCart) {
-        CartScreen(
-            modifier = modifier,
-            token = token,
-            onBack = {
-                showCart = false
-            }
-        )
-    } else {
-        Column(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(24.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "Welcome $userName",
-                style = MaterialTheme.typography.headlineMedium
+    when (currentScreen) {
+        "cart" -> {
+            CartScreen(
+                modifier = modifier,
+                token = token,
+                onBack = {
+                    currentScreen = "home"
+                }
             )
+        }
 
-            Spacer(modifier = Modifier.height(24.dp))
+        "products" -> {
+            ProductsScreen(
+                modifier = modifier,
+                onBack = {
+                    currentScreen = "home"
+                }
+            )
+        }
 
-            Button(
-                onClick = {
-                    showCart = true
-                },
-                modifier = Modifier.fillMaxWidth()
+        else -> {
+            Column(
+                modifier = modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text("View Cart")
+                Text(
+                    text = "Welcome $userName",
+                    style = MaterialTheme.typography.headlineMedium
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Button(
+                    onClick = {
+                        currentScreen = "products"
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("View Products")
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Button(
+                    onClick = {
+                        currentScreen = "cart"
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("View Cart")
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Button(
+                    onClick = onLogout,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Logout")
+                }
             }
+        }
+    }
+}
 
-            Spacer(modifier = Modifier.height(12.dp))
+@Composable
+fun ProductsScreen(
+    modifier: Modifier = Modifier,
+    onBack: () -> Unit
+) {
+    var products by remember { mutableStateOf<List<ProductDto>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf("") }
 
-            Button(
-                onClick = onLogout,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Logout")
+    LaunchedEffect(Unit) {
+        isLoading = true
+        message = ""
+
+        try {
+            val response = RetrofitClient.authApi.getProducts()
+            products = response.products
+        } catch (e: Exception) {
+            message = "Failed to load products: ${e.message}"
+        } finally {
+            isLoading = false
+        }
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "Products",
+            style = MaterialTheme.typography.headlineMedium
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        if (isLoading) {
+            CircularProgressIndicator()
+        } else if (message.isNotBlank()) {
+            Text(message)
+        } else if (products.isEmpty()) {
+            Text("No products found")
+        } else {
+            products.forEach { product ->
+                ProductRow(product = product)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Button(
+            onClick = onBack,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Back to Home")
+        }
+    }
+}
+
+@Composable
+fun ProductRow(product: ProductDto) {
+    val imageModel = rememberImageModel(product.image)
+    val bitmap = rememberBase64Bitmap(product.image)
+    val priceToShow = product.discountedPrice ?: product.price
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        ProductImage(
+            bitmap = bitmap,
+            imageModel = imageModel,
+            contentDescription = product.name
+        )
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        Column {
+            Text(product.name)
+            Text(product.category)
+            Text("${priceToShow} ₪")
+
+            if (product.countInStock > 0) {
+                Text("In stock: ${product.countInStock}")
+            } else {
+                Text("Out of stock")
             }
         }
     }
@@ -286,25 +404,85 @@ fun CartScreen(
 
 @Composable
 fun CartItemRow(item: CartItem) {
-    val rawImage = item.image.ifBlank {
+    val image = item.image.ifBlank {
         item.product?.image ?: ""
     }
+
+    val imageModel = rememberImageModel(image)
+    val bitmap = rememberBase64Bitmap(image)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        ProductImage(
+            bitmap = bitmap,
+            imageModel = imageModel,
+            contentDescription = item.name
+        )
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        Column {
+            Text(item.name)
+            Text("x${item.quantity}")
+            Text("${item.price} ₪")
+        }
+    }
+}
+
+@Composable
+fun ProductImage(
+    bitmap: android.graphics.Bitmap?,
+    imageModel: String?,
+    contentDescription: String
+) {
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap.asImageBitmap(),
+            contentDescription = contentDescription,
+            modifier = Modifier.size(80.dp),
+            contentScale = ContentScale.Crop
+        )
+    } else {
+        AsyncImage(
+            model = imageModel,
+            contentDescription = contentDescription,
+            modifier = Modifier.size(80.dp),
+            contentScale = ContentScale.Crop
+        )
+    }
+}
+
+fun normalizeRawImage(image: String): String {
+    return image
         .replace("\n", "")
         .replace("\r", "")
         .trim()
+}
 
-    val isUrlImage = rawImage.startsWith("http://") ||
-            rawImage.startsWith("https://") ||
-            rawImage.startsWith("/")
+fun rememberImageModel(image: String): String? {
+    val rawImage = normalizeRawImage(image)
 
-    val imageModel = when {
+    return when {
         rawImage.isBlank() -> null
         rawImage.startsWith("http://") || rawImage.startsWith("https://") -> rawImage
         rawImage.startsWith("/") -> "http://10.55.40.23:5000$rawImage"
         else -> null
     }
+}
 
-    val bitmap = remember(rawImage) {
+@Composable
+fun rememberBase64Bitmap(image: String): android.graphics.Bitmap? {
+    val rawImage = normalizeRawImage(image)
+
+    val isUrlImage = rawImage.startsWith("http://") ||
+            rawImage.startsWith("https://") ||
+            rawImage.startsWith("/")
+
+    return remember(rawImage) {
         if (rawImage.isNotBlank() && !isUrlImage) {
             try {
                 val base64Text = rawImage.substringAfter("base64,", rawImage)
@@ -315,37 +493,6 @@ fun CartItemRow(item: CartItem) {
             }
         } else {
             null
-        }
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        if (bitmap != null) {
-            Image(
-                bitmap = bitmap.asImageBitmap(),
-                contentDescription = item.name,
-                modifier = Modifier.size(80.dp),
-                contentScale = ContentScale.Crop
-            )
-        } else {
-            AsyncImage(
-                model = imageModel,
-                contentDescription = item.name,
-                modifier = Modifier.size(80.dp),
-                contentScale = ContentScale.Crop
-            )
-        }
-
-        Spacer(modifier = Modifier.width(12.dp))
-
-        Column {
-            Text(item.name)
-            Text("x${item.quantity}")
-            Text("${item.price} ₪")
         }
     }
 }

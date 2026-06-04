@@ -44,3 +44,25 @@ data class ProductInCart(
     val price: Double,
     val countInStock: Int
 )
+
+data class ProductsResponse(
+    val products: List<ProductDto>,
+    val page: Int,
+    val pages: Int,
+    val totalProducts: Int
+)
+
+data class ProductDto(
+    val _id: String,
+    val name: String,
+    val description: String,
+    val price: Double,
+    val discountedPrice: Double?,
+    val hasDiscount: Boolean = false,
+    val discountPercentage: Double = 0.0,
+    val image: String = "",
+    val category: String,
+    val countInStock: Int,
+    val rating: Double = 0.0,
+    val numReviews: Int = 0
+)
