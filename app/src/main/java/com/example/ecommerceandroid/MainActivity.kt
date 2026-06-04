@@ -6,11 +6,14 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -26,13 +29,19 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.example.ecommerceandroid.network.CartItem
 import com.example.ecommerceandroid.network.LoginRequest
 import com.example.ecommerceandroid.network.RetrofitClient
 import com.example.ecommerceandroid.ui.theme.ECommerceAndroidTheme
 import kotlinx.coroutines.launch
+import android.graphics.BitmapFactory
+import android.util.Base64
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -134,7 +143,6 @@ fun LoginScreen(
                             )
                         )
 
-                        message = "Welcome ${response.user.name}"
                         onLoginSuccess(response.user.name, response.token)
                     } catch (e: Exception) {
                         message = "Login failed: ${e.message}"
@@ -261,8 +269,7 @@ fun CartScreen(
             Text("Your cart is empty")
         } else {
             items.forEach { item ->
-                Text("${item.name} x${item.quantity} -   ${item.price} ₪")
-                Spacer(modifier = Modifier.height(8.dp))
+                CartItemRow(item = item)
             }
         }
 
@@ -273,6 +280,72 @@ fun CartScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Back to Home")
+        }
+    }
+}
+
+@Composable
+fun CartItemRow(item: CartItem) {
+    val rawImage = item.image.ifBlank {
+        item.product?.image ?: ""
+    }
+        .replace("\n", "")
+        .replace("\r", "")
+        .trim()
+
+    val isUrlImage = rawImage.startsWith("http://") ||
+            rawImage.startsWith("https://") ||
+            rawImage.startsWith("/")
+
+    val imageModel = when {
+        rawImage.isBlank() -> null
+        rawImage.startsWith("http://") || rawImage.startsWith("https://") -> rawImage
+        rawImage.startsWith("/") -> "http://10.55.40.23:5000$rawImage"
+        else -> null
+    }
+
+    val bitmap = remember(rawImage) {
+        if (rawImage.isNotBlank() && !isUrlImage) {
+            try {
+                val base64Text = rawImage.substringAfter("base64,", rawImage)
+                val imageBytes = Base64.decode(base64Text, Base64.DEFAULT)
+                BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+            } catch (e: Exception) {
+                null
+            }
+        } else {
+            null
+        }
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = item.name,
+                modifier = Modifier.size(80.dp),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            AsyncImage(
+                model = imageModel,
+                contentDescription = item.name,
+                modifier = Modifier.size(80.dp),
+                contentScale = ContentScale.Crop
+            )
+        }
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        Column {
+            Text(item.name)
+            Text("x${item.quantity}")
+            Text("${item.price} ₪")
         }
     }
 }
