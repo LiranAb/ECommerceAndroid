@@ -43,7 +43,9 @@ import com.example.ecommerceandroid.network.ProductDto
 import com.example.ecommerceandroid.network.RetrofitClient
 import com.example.ecommerceandroid.ui.theme.ECommerceAndroidTheme
 import kotlinx.coroutines.launch
-
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,9 +53,9 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             ECommerceAndroidTheme {
-                var isLoggedIn by remember { mutableStateOf(false) }
-                var userName by remember { mutableStateOf("") }
-                var token by remember { mutableStateOf("") }
+                var isLoggedIn by rememberSaveable { mutableStateOf(false) }
+                var userName by rememberSaveable { mutableStateOf("") }
+                var token by rememberSaveable { mutableStateOf("") }
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     if (isLoggedIn) {
@@ -98,8 +100,11 @@ fun LoginScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(24.dp),
+
         verticalArrangement = Arrangement.Center,
+
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
@@ -178,7 +183,7 @@ fun HomeScreen(
     token: String,
     onLogout: () -> Unit
 ) {
-    var currentScreen by remember { mutableStateOf("home") }
+    var currentScreen by rememberSaveable { mutableStateOf("home") }
 
     when (currentScreen) {
         "cart" -> {
@@ -204,6 +209,7 @@ fun HomeScreen(
             Column(
                 modifier = modifier
                     .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
                     .padding(24.dp),
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -274,6 +280,7 @@ fun ProductsScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
