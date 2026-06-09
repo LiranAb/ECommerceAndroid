@@ -48,13 +48,17 @@ import kotlinx.coroutines.launch
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Switch
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
         setContent {
-            ECommerceAndroidTheme {
+            var isDarkMode by rememberSaveable { mutableStateOf(false) }
+
+            ECommerceAndroidTheme(darkTheme = isDarkMode) {
                 var isLoggedIn by rememberSaveable { mutableStateOf(false) }
                 var userName by rememberSaveable { mutableStateOf("") }
                 var token by rememberSaveable { mutableStateOf("") }
@@ -65,6 +69,8 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier.padding(innerPadding),
                             userName = userName,
                             token = token,
+                            isDarkMode = isDarkMode,
+                            onDarkModeChange = { isDarkMode = it },
                             onLogout = {
                                 userName = ""
                                 token = ""
@@ -183,6 +189,8 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     userName: String,
     token: String,
+    isDarkMode: Boolean,
+    onDarkModeChange: (Boolean) -> Unit,
     onLogout: () -> Unit
 ) {
     var currentScreen by rememberSaveable { mutableStateOf("home") }
@@ -221,6 +229,23 @@ fun HomeScreen(
                     text = "Welcome $userName",
                     style = MaterialTheme.typography.headlineMedium
                 )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (!isDarkMode) "Day Mode" else "Night Mode"
+                    )
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Switch(
+                        checked = isDarkMode,
+                        onCheckedChange = onDarkModeChange
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(24.dp))
 
@@ -511,6 +536,7 @@ fun CartScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(24.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
