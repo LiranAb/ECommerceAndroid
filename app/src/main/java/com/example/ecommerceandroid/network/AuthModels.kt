@@ -66,3 +66,8 @@ data class ProductDto(
     val rating: Double = 0.0,
     val numReviews: Int = 0
 )
+
+data class AddToCartRequest(
+    val productId: String,
+    val quantity: Int
+)
