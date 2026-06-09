@@ -387,12 +387,14 @@ fun ProductDetailsScreen(
 
     var addMessage by remember { mutableStateOf("") }
     var isAdding by remember { mutableStateOf(false) }
+    var quantity by rememberSaveable(product._id) { mutableStateOf(1) }
 
     val scope = rememberCoroutineScope()
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -431,6 +433,52 @@ fun ProductDetailsScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        if (product.countInStock > 0) {
+            Text(
+                text = "Quantity",
+                style = MaterialTheme.typography.titleMedium
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Button(
+                    onClick = {
+                        if (quantity > 1) {
+                            quantity--
+                        }
+                    },
+                    enabled = quantity > 1 && !isAdding
+                ) {
+                    Text("-")
+                }
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                Text(
+                    text = quantity.toString(),
+                    style = MaterialTheme.typography.titleMedium
+                )
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                Button(
+                    onClick = {
+                        if (quantity < product.countInStock) {
+                            quantity++
+                        }
+                    },
+                    enabled = quantity < product.countInStock && !isAdding
+                ) {
+                    Text("+")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
         Button(
             onClick = {
                 scope.launch {
@@ -442,11 +490,11 @@ fun ProductDetailsScreen(
                             token = "Bearer $token",
                             request = AddToCartRequest(
                                 productId = product._id,
-                                quantity = 1
+                                quantity = quantity
                             )
                         )
 
-                        addMessage = "Added to cart"
+                        addMessage = "Added $quantity to cart"
                     } catch (e: Exception) {
                         addMessage = "Failed to add: ${e.message}"
                     } finally {
@@ -460,7 +508,7 @@ fun ProductDetailsScreen(
             if (isAdding) {
                 Text("Adding...")
             } else {
-                Text("Add to Cart")
+                Text("Add $quantity to Cart")
             }
         }
 
