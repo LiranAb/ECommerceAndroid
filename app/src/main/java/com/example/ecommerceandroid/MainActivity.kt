@@ -7,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -37,6 +38,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.example.ecommerceandroid.network.AddToCartRequest
 import com.example.ecommerceandroid.network.CartItem
 import com.example.ecommerceandroid.network.LoginRequest
 import com.example.ecommerceandroid.network.ProductDto
@@ -199,6 +201,7 @@ fun HomeScreen(
         "products" -> {
             ProductsScreen(
                 modifier = modifier,
+                token = token,
                 onBack = {
                     currentScreen = "home"
                 }
@@ -257,11 +260,24 @@ fun HomeScreen(
 @Composable
 fun ProductsScreen(
     modifier: Modifier = Modifier,
+    token: String,
     onBack: () -> Unit
 ) {
     var products by remember { mutableStateOf<List<ProductDto>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
+    var selectedProduct by remember { mutableStateOf<ProductDto?>(null) }
+
+    if (selectedProduct != null) {
+        ProductDetailsScreen(
+            product = selectedProduct!!,
+            token = token,
+            onBack = {
+                selectedProduct = null
+            }
+        )
+        return
+    }
 
     LaunchedEffect(Unit) {
         isLoading = true
@@ -299,7 +315,12 @@ fun ProductsScreen(
             Text("No products found")
         } else {
             products.forEach { product ->
-                ProductRow(product = product)
+                ProductRow(
+                    product = product,
+                    onClick = {
+                        selectedProduct = product
+                    }
+                )
             }
         }
 
@@ -315,7 +336,10 @@ fun ProductsScreen(
 }
 
 @Composable
-fun ProductRow(product: ProductDto) {
+fun ProductRow(
+    product: ProductDto,
+    onClick: () -> Unit
+) {
     val imageModel = rememberImageModel(product.image)
     val bitmap = rememberBase64Bitmap(product.image)
     val priceToShow = product.discountedPrice ?: product.price
@@ -323,6 +347,9 @@ fun ProductRow(product: ProductDto) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable {
+                onClick()
+            }
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -349,6 +376,111 @@ fun ProductRow(product: ProductDto) {
 }
 
 @Composable
+fun ProductDetailsScreen(
+    product: ProductDto,
+    token: String,
+    onBack: () -> Unit
+) {
+    val imageModel = rememberImageModel(product.image)
+    val bitmap = rememberBase64Bitmap(product.image)
+    val priceToShow = product.discountedPrice ?: product.price
+
+    var addMessage by remember { mutableStateOf("") }
+    var isAdding by remember { mutableStateOf(false) }
+
+    val scope = rememberCoroutineScope()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        ProductImage(
+            bitmap = bitmap,
+            imageModel = imageModel,
+            contentDescription = product.name
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = product.name,
+            style = MaterialTheme.typography.headlineMedium
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(product.category)
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text("${priceToShow} ₪")
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(product.description)
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        if (product.countInStock > 0) {
+            Text("In stock: ${product.countInStock}")
+        } else {
+            Text("Out of stock")
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Button(
+            onClick = {
+                scope.launch {
+                    isAdding = true
+                    addMessage = ""
+
+                    try {
+                        RetrofitClient.authApi.addToCart(
+                            token = "Bearer $token",
+                            request = AddToCartRequest(
+                                productId = product._id,
+                                quantity = 1
+                            )
+                        )
+
+                        addMessage = "Added to cart"
+                    } catch (e: Exception) {
+                        addMessage = "Failed to add: ${e.message}"
+                    } finally {
+                        isAdding = false
+                    }
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = product.countInStock > 0 && !isAdding
+        ) {
+            if (isAdding) {
+                Text("Adding...")
+            } else {
+                Text("Add to Cart")
+            }
+        }
+
+        if (addMessage.isNotBlank()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(addMessage)
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Button(
+            onClick = onBack,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Back to Products")
+        }
+    }
+}
+
+@Composable
 fun CartScreen(
     modifier: Modifier = Modifier,
     token: String,
@@ -357,6 +489,10 @@ fun CartScreen(
     var items by remember { mutableStateOf<List<CartItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
+
+    val totalPrice = items.sumOf { item ->
+        item.price * item.quantity
+    }
 
     LaunchedEffect(token) {
         isLoading = true
@@ -396,6 +532,13 @@ fun CartScreen(
             items.forEach { item ->
                 CartItemRow(item = item)
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "Total: ${"%.2f".format(totalPrice)} ₪",
+                style = MaterialTheme.typography.titleMedium
+            )
         }
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -476,7 +619,7 @@ fun rememberImageModel(image: String): String? {
     return when {
         rawImage.isBlank() -> null
         rawImage.startsWith("http://") || rawImage.startsWith("https://") -> rawImage
-        rawImage.startsWith("/") -> "http://10.55.40.23:5000$rawImage"
+        rawImage.startsWith("/") -> "http://10.69.0.140:5000$rawImage"
         else -> null
     }
 }
