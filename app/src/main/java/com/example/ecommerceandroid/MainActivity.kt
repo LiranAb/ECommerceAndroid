@@ -483,6 +483,10 @@ fun CartScreen(
     var isLoading by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
 
+    val totalPrice = items.sumOf { item ->
+        item.price * item.quantity
+    }
+
     LaunchedEffect(token) {
         isLoading = true
         message = ""
@@ -521,6 +525,13 @@ fun CartScreen(
             items.forEach { item ->
                 CartItemRow(item = item)
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "Total: ${"%.2f".format(totalPrice)} ₪",
+                style = MaterialTheme.typography.titleMedium
+            )
         }
 
         Spacer(modifier = Modifier.height(24.dp))
