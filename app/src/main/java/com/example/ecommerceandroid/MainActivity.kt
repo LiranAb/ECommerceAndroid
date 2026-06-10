@@ -1,5 +1,6 @@
 package com.example.ecommerceandroid
 
+import android.content.Context
 import android.graphics.BitmapFactory
 import android.os.Bundle
 import android.util.Base64
@@ -53,17 +54,35 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Switch
 
 class MainActivity : ComponentActivity() {
+    private val sessionDurationMillis = 7L * 24L * 60L * 60L * 1000L
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        val prefs = getSharedPreferences("user_session", Context.MODE_PRIVATE)
+        val savedUserName = prefs.getString("userName", "") ?: ""
+        val savedToken = prefs.getString("token", "") ?: ""
+        val loginTime = prefs.getLong("loginTime", 0L)
+        val now = System.currentTimeMillis()
+
+        val hasValidSession =
+            savedUserName.isNotBlank() &&
+                    savedToken.isNotBlank() &&
+                    loginTime > 0L &&
+                    now - loginTime < sessionDurationMillis
+
+        if (!hasValidSession) {
+            prefs.edit().clear().apply()
+        }
 
         setContent {
             var isDarkMode by rememberSaveable { mutableStateOf(false) }
 
             ECommerceAndroidTheme(darkTheme = isDarkMode) {
-                var isLoggedIn by rememberSaveable { mutableStateOf(false) }
-                var userName by rememberSaveable { mutableStateOf("") }
-                var token by rememberSaveable { mutableStateOf("") }
+                var isLoggedIn by rememberSaveable { mutableStateOf(hasValidSession) }
+                var userName by rememberSaveable { mutableStateOf(if (hasValidSession) savedUserName else "") }
+                var token by rememberSaveable { mutableStateOf(if (hasValidSession) savedToken else "") }
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     if (isLoggedIn) {
@@ -74,6 +93,7 @@ class MainActivity : ComponentActivity() {
                             isDarkMode = isDarkMode,
                             onDarkModeChange = { isDarkMode = it },
                             onLogout = {
+                                prefs.edit().clear().apply()
                                 userName = ""
                                 token = ""
                                 isLoggedIn = false
@@ -83,6 +103,12 @@ class MainActivity : ComponentActivity() {
                         LoginScreen(
                             modifier = Modifier.padding(innerPadding),
                             onLoginSuccess = { name, userToken ->
+                                prefs.edit()
+                                    .putString("userName", name)
+                                    .putString("token", userToken)
+                                    .putLong("loginTime", System.currentTimeMillis())
+                                    .apply()
+
                                 userName = name
                                 token = userToken
                                 isLoggedIn = true
