@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -35,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -212,6 +214,9 @@ fun HomeScreen(
                 token = token,
                 onBack = {
                     currentScreen = "home"
+                },
+                onGoToCart = {
+                    currentScreen = "cart"
                 }
             )
         }
@@ -286,7 +291,8 @@ fun HomeScreen(
 fun ProductsScreen(
     modifier: Modifier = Modifier,
     token: String,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onGoToCart: () -> Unit
 ) {
     var products by remember { mutableStateOf<List<ProductDto>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
@@ -299,7 +305,8 @@ fun ProductsScreen(
             token = token,
             onBack = {
                 selectedProduct = null
-            }
+            },
+            onGoToCart = onGoToCart
         )
         return
     }
@@ -404,7 +411,8 @@ fun ProductRow(
 fun ProductDetailsScreen(
     product: ProductDto,
     token: String,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onGoToCart: () -> Unit
 ) {
     val imageModel = rememberImageModel(product.image)
     val bitmap = rememberBase64Bitmap(product.image)
@@ -423,7 +431,7 @@ fun ProductDetailsScreen(
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        ProductImage(
+        LargeProductImage(
             bitmap = bitmap,
             imageModel = imageModel,
             contentDescription = product.name
@@ -545,6 +553,15 @@ fun ProductDetailsScreen(
         Spacer(modifier = Modifier.height(12.dp))
 
         Button(
+            onClick = onGoToCart,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Cart")
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Button(
             onClick = onBack,
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -658,6 +675,39 @@ fun CartItemRow(item: CartItem) {
 }
 
 @Composable
+fun LargeProductImage(
+    bitmap: android.graphics.Bitmap?,
+    imageModel: String?,
+    contentDescription: String
+) {
+    val configuration = LocalConfiguration.current
+    val imageHeight = configuration.screenHeightDp.dp * 0.3f
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(imageHeight),
+        contentAlignment = Alignment.Center
+    ) {
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = contentDescription,
+                modifier = Modifier.height(imageHeight),
+                contentScale = ContentScale.Fit
+            )
+        } else {
+            AsyncImage(
+                model = imageModel,
+                contentDescription = contentDescription,
+                modifier = Modifier.height(imageHeight),
+                contentScale = ContentScale.Fit
+            )
+        }
+    }
+}
+
+@Composable
 fun ProductImage(
     bitmap: android.graphics.Bitmap?,
     imageModel: String?,
@@ -693,7 +743,7 @@ fun rememberImageModel(image: String): String? {
     return when {
         rawImage.isBlank() -> null
         rawImage.startsWith("http://") || rawImage.startsWith("https://") -> rawImage
-        rawImage.startsWith("/") -> "http://10.69.0.140:5000$rawImage"
+        rawImage.startsWith("/") -> "http://10.55.40.35:5000$rawImage"
         else -> null
     }
 }
