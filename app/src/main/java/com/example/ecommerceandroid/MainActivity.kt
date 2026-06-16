@@ -1069,10 +1069,63 @@ fun CartScreen(
 ) {
     var items by remember { mutableStateOf<List<CartItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
+    var isUpdating by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
 
     val totalPrice = items.sumOf { item ->
         item.price * item.quantity
+    }
+
+    fun updateCartItemQuantity(productId: String, quantity: Int) {
+        if (productId.isBlank()) {
+            message = "Missing product id"
+            return
+        }
+
+        scope.launch {
+            isUpdating = true
+            message = ""
+
+            try {
+                val cart = RetrofitClient.authApi.updateCartItem(
+                    token = "Bearer $token",
+                    productId = productId,
+                    request = UpdateCartQuantityRequest(quantity = quantity)
+                )
+
+                items = cart.items
+            } catch (e: Exception) {
+                message = "Failed to update cart: ${e.message}"
+            } finally {
+                isUpdating = false
+            }
+        }
+    }
+
+    fun removeCartItem(productId: String) {
+        if (productId.isBlank()) {
+            message = "Missing product id"
+            return
+        }
+
+        scope.launch {
+            isUpdating = true
+            message = ""
+
+            try {
+                val cart = RetrofitClient.authApi.removeCartItem(
+                    token = "Bearer $token",
+                    productId = productId
+                )
+
+                items = cart.items
+            } catch (e: Exception) {
+                message = "Failed to remove item: ${e.message}"
+            } finally {
+                isUpdating = false
+            }
+        }
     }
 
     LaunchedEffect(token) {
@@ -1106,13 +1159,32 @@ fun CartScreen(
 
         if (isLoading) {
             CircularProgressIndicator()
+        } else if (isUpdating) {
+            CircularProgressIndicator()
         } else if (message.isNotBlank()) {
             Text(message)
         } else if (items.isEmpty()) {
             Text("Your cart is empty")
         } else {
             items.forEach { item ->
-                CartItemRow(item = item)
+                val productId = item.product?._id ?: ""
+
+                CartItemRow(
+                    item = item,
+                    onIncrease = {
+                        updateCartItemQuantity(productId, item.quantity + 1)
+                    },
+                    onDecrease = {
+                        if (item.quantity <= 1) {
+                            removeCartItem(productId)
+                        } else {
+                            updateCartItemQuantity(productId, item.quantity - 1)
+                        }
+                    },
+                    onRemove = {
+                        removeCartItem(productId)
+                    }
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -1135,7 +1207,12 @@ fun CartScreen(
 }
 
 @Composable
-fun CartItemRow(item: CartItem) {
+fun CartItemRow(
+    item: CartItem,
+    onIncrease: () -> Unit,
+    onDecrease: () -> Unit,
+    onRemove: () -> Unit
+) {
     val image = item.image.ifBlank {
         item.product?.image ?: ""
     }
@@ -1161,6 +1238,29 @@ fun CartItemRow(item: CartItem) {
             Text(item.name)
             Text("x${item.quantity}")
             Text("${item.price} ₪")
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(onClick = onDecrease) {
+                    Text("-")
+                }
+
+                Text(item.quantity.toString())
+
+                OutlinedButton(onClick = onIncrease) {
+                    Text("+")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            OutlinedButton(onClick = onRemove) {
+                Text("Remove")
+            }
         }
     }
 }
@@ -1245,4 +1345,8 @@ data class OrderItemDto(
     val quantity: Int = 0,
     val price: Double = 0.0,
     val image: String = ""
+)
+
+data class UpdateCartQuantityRequest(
+    val quantity: Int
 )

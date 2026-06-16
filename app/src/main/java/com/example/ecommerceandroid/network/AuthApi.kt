@@ -4,7 +4,12 @@ import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.POST
+import retrofit2.http.PUT
+import retrofit2.http.DELETE
+import retrofit2.http.Path
 import com.example.ecommerceandroid.OrderDto
+import com.example.ecommerceandroid.UpdateCartQuantityRequest
+
 interface AuthApi {
 
     @POST("auth/login")
@@ -42,4 +47,18 @@ interface AuthApi {
     suspend fun getMyOrders(
         @Header("Authorization") token: String
     ): List<OrderDto>
+
+    @PUT("cart/{productId}")
+    suspend fun updateCartItem(
+        @Header("Authorization") token: String,
+        @Path("productId") productId: String,
+        @Body request: UpdateCartQuantityRequest
+    ): CartResponse
+
+
+    @DELETE("cart/{productId}")
+    suspend fun removeCartItem(
+        @Header("Authorization") token: String,
+        @Path("productId") productId: String
+    ): CartResponse
 }
