@@ -225,6 +225,16 @@ fun HomeScreen(
             )
         }
 
+        "orders" -> {
+            MyOrdersScreen(
+                modifier = modifier,
+                token = token,
+                onBack = {
+                    currentScreen = "home"
+                }
+            )
+        }
+
         else -> {
             var searchTerm by rememberSaveable { mutableStateOf("") }
             var products by remember { mutableStateOf<List<ProductDto>>(emptyList()) }
@@ -327,6 +337,13 @@ fun HomeScreen(
                             ) {
                                 Text("Cart")
                             }
+                        }
+
+                        OutlinedButton(
+                            onClick = { currentScreen = "orders" },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("My Orders")
                         }
                     }
                 }
@@ -730,6 +747,128 @@ fun ProductsScreen(
 }
 
 @Composable
+fun MyOrdersScreen(
+    modifier: Modifier = Modifier,
+    token: String,
+    onBack: () -> Unit
+) {
+    var orders by remember { mutableStateOf<List<OrderDto>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf("") }
+
+    LaunchedEffect(token) {
+        isLoading = true
+        message = ""
+
+        try {
+            orders = RetrofitClient.authApi.getMyOrders("Bearer $token")
+        } catch (e: Exception) {
+            message = "Failed to load orders: ${e.message}"
+        } finally {
+            isLoading = false
+        }
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text(
+            text = "My Orders",
+            style = MaterialTheme.typography.headlineMedium
+        )
+
+        if (isLoading) {
+            CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+        } else if (message.isNotBlank()) {
+            Text(
+                text = message,
+                color = MaterialTheme.colorScheme.error
+            )
+        } else if (orders.isEmpty()) {
+            Text(
+                text = "You haven't placed any orders yet.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            orders.forEach { order ->
+                OrderCard(order = order)
+            }
+        }
+
+        Button(
+            onClick = onBack,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Back to Home")
+        }
+    }
+}
+
+@Composable
+fun OrderCard(order: OrderDto) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = order.orderNumber.ifBlank { "Order ${order._id.takeLast(6)}" },
+                style = MaterialTheme.typography.titleMedium
+            )
+
+            Text("Date: ${formatOrderDate(order.createdAt)}")
+            Text("Total: ${formatPrice(order.totalPrice)}")
+            Text("Paid: ${if (order.isPaid) "Yes" else "No"}")
+            Text("Status: ${order.displayStatus()}")
+
+            if (order.orderItems.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Items",
+                    style = MaterialTheme.typography.titleSmall
+                )
+
+                order.orderItems.take(3).forEach { item ->
+                    Text("${item.name} x${item.quantity}")
+                }
+
+                if (order.orderItems.size > 3) {
+                    Text("+${order.orderItems.size - 3} more items")
+                }
+            }
+        }
+    }
+}
+
+fun OrderDto.displayStatus(): String {
+    return when {
+        status.isNotBlank() -> status.replaceFirstChar { it.uppercase() }
+        isDelivered -> "Delivered"
+        isPaid -> "Paid"
+        else -> "Pending"
+    }
+}
+
+fun formatOrderDate(value: String): String {
+    return if (value.length >= 10) value.take(10) else value.ifBlank { "-" }
+}
+
+fun formatPrice(value: Double): String {
+    return "₪${"%.2f".format(value)}"
+}
+
+@Composable
 fun ProductRow(
     product: ProductDto,
     onClick: () -> Unit
@@ -1089,3 +1228,21 @@ fun rememberBase64Bitmap(image: String): android.graphics.Bitmap? {
         }
     }
 }
+
+data class OrderDto(
+    val _id: String = "",
+    val orderNumber: String = "",
+    val orderItems: List<OrderItemDto> = emptyList(),
+    val totalPrice: Double = 0.0,
+    val isPaid: Boolean = false,
+    val isDelivered: Boolean = false,
+    val status: String = "",
+    val createdAt: String = ""
+)
+
+data class OrderItemDto(
+    val name: String = "",
+    val quantity: Int = 0,
+    val price: Double = 0.0,
+    val image: String = ""
+)

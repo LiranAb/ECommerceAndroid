@@ -4,7 +4,7 @@ import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.POST
-
+import com.example.ecommerceandroid.OrderDto
 interface AuthApi {
 
     @POST("auth/login")
@@ -35,4 +35,11 @@ interface AuthApi {
 
     @GET("products")
     suspend fun getProducts(): ProductsResponse
+
+
+
+    @GET("orders/my")
+    suspend fun getMyOrders(
+        @Header("Authorization") token: String
+    ): List<OrderDto>
 }
