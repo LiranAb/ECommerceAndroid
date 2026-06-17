@@ -55,6 +55,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Switch
+import com.example.ecommerceandroid.network.CreateOrderRequest
+import com.example.ecommerceandroid.network.ShippingAddressRequest
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -209,6 +211,9 @@ fun HomeScreen(
                 token = token,
                 onBack = {
                     currentScreen = "home"
+                },
+                onOrderPlaced = {
+                    currentScreen = "orders"
                 }
             )
         }
@@ -1060,16 +1065,17 @@ fun ProductDetailsScreen(
         }
     }
 }
-
 @Composable
 fun CartScreen(
     modifier: Modifier = Modifier,
     token: String,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onOrderPlaced: () -> Unit = {}
 ) {
     var items by remember { mutableStateOf<List<CartItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
     var isUpdating by remember { mutableStateOf(false) }
+    var isSubmitting by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
@@ -1128,6 +1134,37 @@ fun CartScreen(
         }
     }
 
+    fun placeOrder() {
+        if (items.isEmpty()) return
+
+        scope.launch {
+            isSubmitting = true
+            message = ""
+
+            try {
+                RetrofitClient.authApi.createOrder(
+                    token = "Bearer $token",
+                    request = CreateOrderRequest(
+                        shippingAddress = ShippingAddressRequest(
+                            address = "Default address",
+                            city = "Default city",
+                            postalCode = "00000",
+                            country = "Israel"
+                        ),
+                        paymentMethod = "cash"
+                    )
+                )
+
+                items = emptyList()
+                onOrderPlaced()
+            } catch (e: Exception) {
+                message = "Failed to place order: ${e.message}"
+            } finally {
+                isSubmitting = false
+            }
+        }
+    }
+
     LaunchedEffect(token) {
         isLoading = true
         message = ""
@@ -1157,9 +1194,7 @@ fun CartScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        if (isLoading) {
-            CircularProgressIndicator()
-        } else if (isUpdating) {
+        if (isLoading || isUpdating || isSubmitting) {
             CircularProgressIndicator()
         } else if (message.isNotBlank()) {
             Text(message)
@@ -1193,6 +1228,16 @@ fun CartScreen(
                 text = "Total: ${"%.2f".format(totalPrice)} ₪",
                 style = MaterialTheme.typography.titleMedium
             )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Button(
+                onClick = { placeOrder() },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = items.isNotEmpty()
+            ) {
+                Text("Proceed to Checkout")
+            }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -1301,7 +1346,7 @@ fun rememberImageModel(image: String): String? {
     return when {
         rawImage.isBlank() -> null
         rawImage.startsWith("http://") || rawImage.startsWith("https://") -> rawImage
-        rawImage.startsWith("/") -> "http://10.69.0.140:5000$rawImage"
+        rawImage.startsWith("/") -> "http://10.55.40.36:5000$rawImage"
         else -> null
     }
 }
