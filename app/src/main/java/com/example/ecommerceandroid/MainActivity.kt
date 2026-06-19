@@ -2,6 +2,7 @@ package com.example.ecommerceandroid
 
 import android.graphics.BitmapFactory
 import android.os.Bundle
+import android.speech.tts.TextToSpeech
 import android.util.Base64
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -57,11 +58,20 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Switch
 import com.example.ecommerceandroid.network.CreateOrderRequest
 import com.example.ecommerceandroid.network.ShippingAddressRequest
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
+    private var textToSpeech: TextToSpeech? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        textToSpeech = TextToSpeech(this) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                textToSpeech?.language = Locale.US
+            }
+        }
 
         setContent {
             var isDarkMode by rememberSaveable { mutableStateOf(false) }
@@ -70,6 +80,7 @@ class MainActivity : ComponentActivity() {
                 var isLoggedIn by rememberSaveable { mutableStateOf(false) }
                 var userName by rememberSaveable { mutableStateOf("") }
                 var token by rememberSaveable { mutableStateOf("") }
+                var speakingProductId by rememberSaveable { mutableStateOf<String?>(null) }
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     if (isLoggedIn) {
@@ -79,7 +90,19 @@ class MainActivity : ComponentActivity() {
                             token = token,
                             isDarkMode = isDarkMode,
                             onDarkModeChange = { isDarkMode = it },
+                            speakingProductId = speakingProductId,
+                            onToggleStockSpeech = { product ->
+                                if (speakingProductId == product._id) {
+                                    stopSpeaking()
+                                    speakingProductId = null
+                                } else {
+                                    speakingProductId = product._id
+                                    speakStock(product)
+                                }
+                            },
                             onLogout = {
+                                stopSpeaking()
+                                speakingProductId = null
                                 userName = ""
                                 token = ""
                                 isLoggedIn = false
@@ -98,6 +121,27 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private fun speakStock(product: ProductDto) {
+        val stockText = if (product.countInStock > 0) {
+            "${product.name} has ${product.countInStock} items available in stock"
+        } else {
+            "${product.name} is out of stock"
+        }
+
+        textToSpeech?.speak(stockText, TextToSpeech.QUEUE_FLUSH, null, product._id)
+    }
+
+    private fun stopSpeaking() {
+        textToSpeech?.stop()
+    }
+
+    override fun onDestroy() {
+        textToSpeech?.stop()
+        textToSpeech?.shutdown()
+        textToSpeech = null
+        super.onDestroy()
     }
 }
 
@@ -199,6 +243,8 @@ fun HomeScreen(
     token: String,
     isDarkMode: Boolean,
     onDarkModeChange: (Boolean) -> Unit,
+    speakingProductId: String?,
+    onToggleStockSpeech: (ProductDto) -> Unit,
     onLogout: () -> Unit
 ) {
     var currentScreen by rememberSaveable { mutableStateOf("home") }
@@ -223,6 +269,8 @@ fun HomeScreen(
                 modifier = modifier,
                 token = token,
                 initialFilter = productFilter,
+                speakingProductId = speakingProductId,
+                onToggleStockSpeech = onToggleStockSpeech,
                 onBack = {
                     productFilter = ""
                     currentScreen = "home"
@@ -382,10 +430,15 @@ fun HomeScreen(
                                 containerColor = MaterialTheme.colorScheme.surfaceVariant
                             )
                         ) {
-                            ProductRow(product = product, onClick = {
-                                productFilter = product.name
-                                currentScreen = "products"
-                            })
+                            ProductRow(
+                                product = product,
+                                isSpeaking = speakingProductId == product._id,
+                                onToggleStockSpeech = onToggleStockSpeech,
+                                onClick = {
+                                    productFilter = product.name
+                                    currentScreen = "products"
+                                }
+                            )
                         }
                     }
                 }
@@ -593,6 +646,8 @@ fun FilteredProductsScreen(
     modifier: Modifier = Modifier,
     token: String,
     initialFilter: String = "",
+    speakingProductId: String? = null,
+    onToggleStockSpeech: (ProductDto) -> Unit = {},
     onBack: () -> Unit
 ) {
     var products by remember { mutableStateOf<List<ProductDto>>(emptyList()) }
@@ -610,6 +665,8 @@ fun FilteredProductsScreen(
         ProductDetailsScreen(
             product = selectedProduct!!,
             token = token,
+            isSpeaking = speakingProductId == selectedProduct!!._id,
+            onToggleStockSpeech = onToggleStockSpeech,
             onBack = {
                 selectedProduct = null
             }
@@ -655,6 +712,8 @@ fun FilteredProductsScreen(
             visibleProducts.forEach { product ->
                 ProductRow(
                     product = product,
+                    isSpeaking = speakingProductId == product._id,
+                    onToggleStockSpeech = onToggleStockSpeech,
                     onClick = {
                         selectedProduct = product
                     }
@@ -677,6 +736,8 @@ fun FilteredProductsScreen(
 fun ProductsScreen(
     modifier: Modifier = Modifier,
     token: String,
+    speakingProductId: String? = null,
+    onToggleStockSpeech: (ProductDto) -> Unit = {},
     onBack: () -> Unit
 ) {
     var products by remember { mutableStateOf<List<ProductDto>>(emptyList()) }
@@ -688,6 +749,8 @@ fun ProductsScreen(
         ProductDetailsScreen(
             product = selectedProduct!!,
             token = token,
+            isSpeaking = speakingProductId == selectedProduct!!._id,
+            onToggleStockSpeech = onToggleStockSpeech,
             onBack = {
                 selectedProduct = null
             }
@@ -733,6 +796,8 @@ fun ProductsScreen(
             products.forEach { product ->
                 ProductRow(
                     product = product,
+                    isSpeaking = speakingProductId == product._id,
+                    onToggleStockSpeech = onToggleStockSpeech,
                     onClick = {
                         selectedProduct = product
                     }
@@ -876,6 +941,8 @@ fun formatPrice(value: Double): String {
 @Composable
 fun ProductRow(
     product: ProductDto,
+    isSpeaking: Boolean = false,
+    onToggleStockSpeech: (ProductDto) -> Unit = {},
     onClick: () -> Unit
 ) {
     val imageModel = rememberImageModel(product.image)
@@ -909,6 +976,12 @@ fun ProductRow(
             } else {
                 Text("Out of stock")
             }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            OutlinedButton(onClick = { onToggleStockSpeech(product) }) {
+                Text(if (isSpeaking) "Stop Speaking" else "Speak Stock")
+            }
         }
     }
 }
@@ -917,6 +990,8 @@ fun ProductRow(
 fun ProductDetailsScreen(
     product: ProductDto,
     token: String,
+    isSpeaking: Boolean = false,
+    onToggleStockSpeech: (ProductDto) -> Unit = {},
     onBack: () -> Unit
 ) {
     val imageModel = rememberImageModel(product.image)
@@ -967,6 +1042,15 @@ fun ProductDetailsScreen(
             Text("In stock: ${product.countInStock}")
         } else {
             Text("Out of stock")
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        OutlinedButton(
+            onClick = { onToggleStockSpeech(product) },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(if (isSpeaking) "Stop Speaking" else "Speak Stock")
         }
 
         Spacer(modifier = Modifier.height(24.dp))
