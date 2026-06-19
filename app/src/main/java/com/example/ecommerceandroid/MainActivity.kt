@@ -1346,7 +1346,7 @@ fun rememberImageModel(image: String): String? {
     return when {
         rawImage.isBlank() -> null
         rawImage.startsWith("http://") || rawImage.startsWith("https://") -> rawImage
-        rawImage.startsWith("/") -> "http://10.55.40.36:5000$rawImage"
+        rawImage.startsWith("/") -> "http://10.69.0.104:5000$rawImage"
         else -> null
     }
 }
